@@ -1,0 +1,238 @@
+#define F_CPU 16000000UL
+#include "mcu.h"
+#include <stdint.h>
+#include <stdio.h>
+
+#include "lcd.h"
+#include "keypad.h"
+#include "delay.h"
+#include "avr_gpio.h"
+#include "board_config.h"
+#define DOOR_OPEN_DURATION_MS (3000)
+#define DOOR_CLOSE_DURATION_MS (2000)
+#define FLOOR_MOVING_SPEED_MS (3000)
+
+#define MIN_FLOOR 0
+#define MAX_FLOOR 99
+
+int16_t CURRENT_FLOOR = 0;
+
+typedef enum {
+	IDLE = 0,
+	GOINGUP,
+	GOINGDOWN,
+	DOOR_OPENING,
+	DOOR_CLOSING,
+	FAULT,
+} state_t;
+
+avr_gpio_t movement_led = {
+	.port = &IO_10_PORT,
+	.direction = &IO_10_DIRECTION,
+	.pin_offset = IO_10_PIN,
+	.input = &IO_10_INPUT
+};
+
+avr_gpio_t door_led = {
+	.port = &IO_11_PORT,
+	.direction = &IO_11_DIRECTION,
+	.pin_offset = IO_11_PIN,
+	.input = &IO_11_INPUT
+};
+
+static void lcd_display_floor(int16_t floor)
+{
+	lcd_clrscr();
+	lcd_gotoxy(0, 0);
+	lcd_puts("Current floor:");
+
+	lcd_gotoxy(0, 1);
+
+	if (floor >= 10) {
+		lcd_putc((floor / 10) + '0');
+		lcd_putc((floor % 10) + '0');
+		} else {
+		lcd_putc(floor + '0');
+	}
+}
+
+static int16_t floor_choice(void)
+{
+	int16_t destination_floor = 0;
+	uint8_t key;
+	uint8_t digits_entered = 0;
+
+	while (1) {
+		lcd_clrscr();
+		lcd_gotoxy(0, 0);
+		lcd_puts("Choose floor");
+
+		destination_floor = 0;
+		digits_entered = 0;
+
+		while (1) {
+			key = KEYPAD_GetKey();
+
+			if (key >= '0' && key <= '9') {
+				if (digits_entered < 2) {
+					destination_floor = (destination_floor * 10) + (key - '0');
+					digits_entered++;
+
+					lcd_gotoxy(0, 1);
+					if (digits_entered == 1) {
+						lcd_putc(key);
+						} else {
+						lcd_clrscr();
+						lcd_gotoxy(0, 0);
+						lcd_puts("Choose floor");
+						lcd_gotoxy(0, 1);
+						lcd_putc((destination_floor / 10) + '0');
+						lcd_putc((destination_floor % 10) + '0');
+					}
+				}
+			}
+			else if (key == '#') {
+				if (digits_entered > 0 &&
+				destination_floor >= MIN_FLOOR &&
+				destination_floor <= MAX_FLOOR) {
+					return destination_floor;
+				}
+
+				lcd_clrscr();
+				lcd_puts("Invalid input");
+				DELAY_sec(1);
+				break;
+			}
+			else if (key == '*') {
+				destination_floor = 0;
+				digits_entered = 0;
+				lcd_clrscr();
+				lcd_puts("Choose floor");
+			}
+		}
+	}
+}
+
+static state_t choose_direction(int16_t destination_floor)
+{
+	if (destination_floor > CURRENT_FLOOR) {
+		return GOINGUP;
+	}
+	else if (destination_floor < CURRENT_FLOOR) {
+		return GOINGDOWN;
+	}
+	else {
+		lcd_clrscr();
+		lcd_puts("Same floor");
+		DELAY_sec(1);
+		return FAULT;
+	}
+}
+
+static state_t going_up(int16_t destination_floor)
+{
+	set_as_output(&movement_led);
+	set_gpio(&movement_led); // LED ON
+
+	while (CURRENT_FLOOR < destination_floor) {
+
+		CURRENT_FLOOR++;
+
+		lcd_display_floor(CURRENT_FLOOR);
+
+		DELAY_ms(FLOOR_MOVING_SPEED_MS);
+	}
+
+	clear_gpio(&movement_led); // LED OFF
+
+	return DOOR_OPENING;
+}
+
+static state_t going_down(int16_t destination_floor)
+{
+	set_as_output(&movement_led);
+	set_gpio(&movement_led); // LED ON
+
+	while (CURRENT_FLOOR > destination_floor) {
+
+		CURRENT_FLOOR--;
+
+		lcd_display_floor(CURRENT_FLOOR);
+
+		DELAY_ms(FLOOR_MOVING_SPEED_MS);
+	}
+
+	clear_gpio(&movement_led); // LED OFF
+
+	return DOOR_OPENING;
+}
+
+static state_t door_opening(void)
+{
+	set_as_output(&door_led);
+	set_gpio(&door_led); // LED ON
+
+	lcd_clrscr();
+	lcd_puts("Door open");
+
+	DELAY_ms(DOOR_OPEN_DURATION_MS);
+
+	clear_gpio(&door_led); // LED OFF
+
+	return DOOR_CLOSING;
+}
+
+
+static state_t door_closing(void)
+{
+	lcd_clrscr();
+	lcd_puts("Door closing");
+
+	DELAY_ms(DOOR_CLOSE_DURATION_MS);
+
+	return IDLE;
+}
+
+
+int main(void)
+{
+	lcd_init(LCD_DISP_ON);
+
+	state_t state = IDLE;
+	int16_t destination = 0;
+
+	while (1)
+	{
+		switch (state)
+		{
+			case IDLE:
+			destination = floor_choice();
+			state = choose_direction(destination);
+			break;
+
+			case GOINGUP:
+			state = going_up(destination);
+			break;
+
+			case GOINGDOWN:
+			state = going_down(destination);
+			break;
+
+			case DOOR_OPENING:
+			state = door_opening();
+			break;
+
+			case DOOR_CLOSING:
+			state = door_closing();
+			break;
+
+			case FAULT:
+			state = IDLE;
+			break;
+
+			default:
+			state = IDLE;
+			break;
+		}
+	}
+}
