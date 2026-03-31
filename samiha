@@ -33,7 +33,7 @@ avr_gpio_t movement_led = {
 	.input = &IO_10_INPUT
 };
 
-avr_gpio_t door_led = {
+avr_gpio_t door_led = { // yes it is good but in circuit diagram we used two LEDs for door opening and closing so you need to define one more LED.
 	.port = &IO_11_PORT,
 	.direction = &IO_11_DIRECTION,
 	.pin_offset = IO_11_PIN,
@@ -183,7 +183,7 @@ static state_t door_opening(void)
 }
 
 
-static state_t door_closing(void)
+static state_t door_closing(void) // please add LED here as well as instructions says that: "Door closing LED is on for 2 seconds"
 {
 	lcd_clrscr();
 	lcd_puts("Door closing");
