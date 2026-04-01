@@ -1,36 +1,49 @@
-#define F_CPU 16000000UL
+// Libraries 
+
 #include "mcu.h"
 #include <stdint.h>
-#include <stdio.h>
-
+#include <stdio.h> 
 #include "lcd.h"
 #include "keypad.h"
 #include "delay.h"
 #include "avr_gpio.h"
 #include "board_config.h"
-#define DOOR_OPEN_DURATION_MS (3000)
-#define DOOR_CLOSE_DURATION_MS (2000)
-#define FLOOR_MOVING_SPEED_MS (3000)
 
+// Constants
+#define DOOR_OPEN_DURATION_MS (3000) // door is open for 3 seconds
+#define DOOR_CLOSE_DURATION_MS (2000) // door is closed in 2 seconds
+#define FLOOR_MOVING_SPEED_MS (3000) // speed:  1 floor/3 seconds
+#define F_CPU 16000000UL
+
+// if obstacle is detected, the LEDs blinking time
+#define FAULT_BLINK_PERIOD_MS (200)
+#define FAULT_BLINK_DURATION_MS (3000)
+
+// Floor numbers
 #define MIN_FLOOR 0
 #define MAX_FLOOR 99
 
-int16_t CURRENT_FLOOR = 0;
+// Global variable (initial)
+int16_t CURRENT_FLOOR = 0; // data type is int 16 bit and t is for type
 
-typedef enum {
-	IDLE = 0,
-	GOINGUP,
-	GOINGDOWN,
-	DOOR_OPENING,
-	DOOR_CLOSING,
-	FAULT,
-} state_t;
 
-avr_gpio_t movement_led = {
-	.port = &IO_10_PORT,
-	.direction = &IO_10_DIRECTION,
-	.pin_offset = IO_10_PIN,
-	.input = &IO_10_INPUT
+// state 
+typedef enum { // typedef is for defining state_t (to make the code readable)
+	IDLE = 0, // empty
+	GOINGUP = 1, 
+	GOINGDOWN = 2,
+	DOOR_OPENING = 3,
+	DOOR_CLOSING = 4,
+	FAULT = 5, // fault
+} state_t; // enum includes all the possible states of elevator
+
+
+// LED configurations 
+avr_gpio_t movement_led = { // avr_gpio_t stores all register adresses to control GPIO pin
+	.port = &IO_10_PORT, // decides output value if it is 1 LED is on if it is 0 LED is off 
+	.direction = &IO_10_DIRECTION, // decides is pin input or output (LED is always output)
+	.pin_offset = IO_10_PIN, // The correspondence pin of bit in port register (position)
+	.input = &IO_10_INPUT // read
 };
 
 avr_gpio_t door_led = { // yes it is good but in circuit diagram we used two LEDs for door opening and closing so you need to define one more LED.
@@ -40,9 +53,105 @@ avr_gpio_t door_led = { // yes it is good but in circuit diagram we used two LED
 	.input = &IO_11_INPUT
 };
 
+
+
+
+
+
+// Takes input as destination floor
+static int16_t floor_choice(void)
+{
+	int16_t destination_floor = 0;
+	uint8_t key; // pressed key (gets max 255 which is enough)
+	uint8_t digits_entered = 0; //entered digit (max 2)
+
+	while (1) { // continuously waits for input from user
+		lcd_clrscr(); // clear the screen
+		lcd_gotoxy(0, 0); // positions the cursor to left up corner (1st row 1st column)
+		lcd_puts("Choose floor"); // prints it to screen
+		
+		// resets inputs
+		destination_floor = 0;
+		digits_entered = 0;
+
+		while (1) { // reading key
+			key = KEYPAD_GetKey(); // read key from keypad
+
+			if (key >= '0' && key <= '9') { // checks if key is number
+				if (digits_entered < 2) { // checks digit number
+					destination_floor = (destination_floor * 10) + (key - '0'); // move the entered number to left and place the new number to right
+					// '0' converts character to number
+					digits_entered++; // count digits
+
+					lcd_gotoxy(0, 1); // go to next row
+					if (digits_entered == 1) {
+						lcd_putc(key); // prints the first entered number
+						} 
+						else {
+						lcd_clrscr(); 
+						lcd_gotoxy(0, 0); // top left corner
+						lcd_puts("Choose floor");
+						lcd_gotoxy(0, 1); // next row
+						if (destination_floor >= 10) {
+							lcd_putc((destination_floor / 10) + '0'); // print first number (*10)
+							lcd_putc((destination_floor % 10) + '0'); // print second number (to left)
+							} else {
+							lcd_putc(destination_floor + '0');
+						}
+					}
+				}
+			}
+			else if (key == '#') { // confirms the entered number
+				if (digits_entered > 0 && destination_floor >= MIN_FLOOR && destination_floor <= MAX_FLOOR) { // checks if one number is entered and it is between 0-99
+					return destination_floor; 
+				}
+				
+				// else
+				lcd_clrscr();
+				lcd_gotoxy(0, 0);
+				lcd_puts("Invalid input");
+				break;
+			}
+			else if (key == '*') { // reset key
+				destination_floor = 0;
+				digits_entered = 0;
+				lcd_clrscr();
+				lcd_gotoxy(0, 0);
+				lcd_puts("Choose floor");
+			}
+            else if (key == 'A' || key == 'B' || key =='C' || key =='D'){ // eliminating the possibility to take input as letter
+                lcd_clrscr(); 
+				lcd_gotoxy(0, 0);
+				lcd_puts("Invalid input");
+				break;
+
+            }
+		}
+	}
+}
+
+static state_t choose_direction(int16_t destination_floor) // type is state_t because it returns the states that are defined in enum
+{
+	if (destination_floor > CURRENT_FLOOR) { // decides the direction
+		//return GOINGUP;
+	}
+	else if (destination_floor < CURRENT_FLOOR) {
+		//return GOINGDOWN;
+	}
+	else { // if destination floor=current floor warns the user
+		lcd_clrscr();
+		lcd_gotoxy(0, 0);
+		lcd_puts("Same floor"); // prints same floor
+		return FAULT; // returns 5 (in enum as fault)
+	}
+}
+
+// Until this part is IDLE
+
+// Displaying the current floor
 static void lcd_display_floor(int16_t floor)
 {
-	lcd_clrscr();
+	lcd_clrscr(); // clear the screen
 	lcd_gotoxy(0, 0);
 	lcd_puts("Current floor:");
 
@@ -56,158 +165,103 @@ static void lcd_display_floor(int16_t floor)
 	}
 }
 
-static int16_t floor_choice(void)
-{
-	int16_t destination_floor = 0;
-	uint8_t key;
-	uint8_t digits_entered = 0;
 
-	while (1) {
-		lcd_clrscr();
-		lcd_gotoxy(0, 0);
-		lcd_puts("Choose floor");
-
-		destination_floor = 0;
-		digits_entered = 0;
-
-		while (1) {
-			key = KEYPAD_GetKey();
-
-			if (key >= '0' && key <= '9') {
-				if (digits_entered < 2) {
-					destination_floor = (destination_floor * 10) + (key - '0');
-					digits_entered++;
-
-					lcd_gotoxy(0, 1);
-					if (digits_entered == 1) {
-						lcd_putc(key);
-						} else {
-						lcd_clrscr();
-						lcd_gotoxy(0, 0);
-						lcd_puts("Choose floor");
-						lcd_gotoxy(0, 1);
-						lcd_putc((destination_floor / 10) + '0');
-						lcd_putc((destination_floor % 10) + '0');
-					}
-				}
-			}
-			else if (key == '#') {
-				if (digits_entered > 0 &&
-				destination_floor >= MIN_FLOOR &&
-				destination_floor <= MAX_FLOOR) {
-					return destination_floor;
-				}
-
-				lcd_clrscr();
-				lcd_puts("Invalid input");
-				DELAY_sec(1);
-				break;
-			}
-			else if (key == '*') {
-				destination_floor = 0;
-				digits_entered = 0;
-				lcd_clrscr();
-				lcd_puts("Choose floor");
-			}
-		}
-	}
-}
-
-static state_t choose_direction(int16_t destination_floor)
-{
-	if (destination_floor > CURRENT_FLOOR) {
-		return GOINGUP;
-	}
-	else if (destination_floor < CURRENT_FLOOR) {
-		return GOINGDOWN;
-	}
-	else {
-		lcd_clrscr();
-		lcd_puts("Same floor");
-		DELAY_sec(1);
-		return FAULT;
-	}
-}
-
+// Going up function
 static state_t going_up(int16_t destination_floor)
 {
-	set_as_output(&movement_led);
+	set_as_output(&movement_led); // makes pin output
 	set_gpio(&movement_led); // LED ON
 
-	while (CURRENT_FLOOR < destination_floor) {
+	while (CURRENT_FLOOR < destination_floor) { // checks the floor
 
-		CURRENT_FLOOR++;
+		CURRENT_FLOOR++; // increment floor number
 
-		lcd_display_floor(CURRENT_FLOOR);
+		lcd_display_floor(CURRENT_FLOOR); // print current floor
 
-		DELAY_ms(FLOOR_MOVING_SPEED_MS);
+		DELAY_ms(FLOOR_MOVING_SPEED_MS); // time to move for one floor
 	}
 
 	clear_gpio(&movement_led); // LED OFF
 
-	return DOOR_OPENING;
+	return DOOR_OPENING; // door opens when destination floor is achieved
 }
+
+
+// Going down function
+
 
 static state_t going_down(int16_t destination_floor)
 {
-	set_as_output(&movement_led);
+	set_as_output(&movement_led); // makes pin output
 	set_gpio(&movement_led); // LED ON
 
-	while (CURRENT_FLOOR > destination_floor) {
+	while (CURRENT_FLOOR > destination_floor) { // checks the floor
 
-		CURRENT_FLOOR--;
+		CURRENT_FLOOR--; // decrement the floor
 
-		lcd_display_floor(CURRENT_FLOOR);
+		lcd_display_floor(CURRENT_FLOOR); // print the current floor
 
-		DELAY_ms(FLOOR_MOVING_SPEED_MS);
+		DELAY_ms(FLOOR_MOVING_SPEED_MS); // time to move for one floor
 	}
 
 	clear_gpio(&movement_led); // LED OFF
 
-	return DOOR_OPENING;
+	return DOOR_OPENING; // door opens when destination floor is achieved
 }
+
+
+// Door opening function
 
 static state_t door_opening(void)
 {
-	set_as_output(&door_led);
+	set_as_output(&door_led); // makes pin output
 	set_gpio(&door_led); // LED ON
 
-	lcd_clrscr();
-	lcd_puts("Door open");
+	lcd_clrscr(); // clears the screen
+	lcd_puts("Door open"); // print 
 
-	DELAY_ms(DOOR_OPEN_DURATION_MS);
+	DELAY_ms(DOOR_OPEN_DURATION_MS); // time to open the door
 
 	clear_gpio(&door_led); // LED OFF
 
-	return DOOR_CLOSING;
+	return DOOR_CLOSING; // next step after the door opening
 }
 
+
+
+
+// Door closing function
 
 static state_t door_closing(void) // please add LED here as well as instructions says that: "Door closing LED is on for 2 seconds"
 {
-	lcd_clrscr();
-	lcd_puts("Door closing");
+    // definition of the LED will be insterted here (delete here afterwards)
+	lcd_clrscr(); // clear the screen
+	lcd_puts("Door closing"); // print
 
-	DELAY_ms(DOOR_CLOSE_DURATION_MS);
+	DELAY_ms(DOOR_CLOSE_DURATION_MS); // time to close the door
 
-	return IDLE;
+	return IDLE; // waits for the next order (next floor)
 }
 
 
+
+
+// Main menu
+
 int main(void)
 {
-	lcd_init(LCD_DISP_ON);
+	lcd_init(LCD_DISP_ON); // initialization of the LCD
 
-	state_t state = IDLE;
-	int16_t destination = 0;
+	state_t state = IDLE; // initial state
+	int16_t destination = 0; // initial case
 
-	while (1)
+	while (1) // loop
 	{
-		switch (state)
+		switch (state) // to determine the current state
 		{
 			case IDLE:
-			destination = floor_choice();
-			state = choose_direction(destination);
+			destination = floor_choice(); // takes input as destination floor
+			state = choose_direction(destination); // decides the direction of movement
 			break;
 
 			case GOINGUP:
