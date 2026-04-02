@@ -3,10 +3,21 @@
 
 /// GPIO pin mappings from MCU ports to Arduino UNO digital IO pins
 
+
+#define IO_2_PORT (PORTD)
+#define IO_2_DIRECTION (DDRD)
+#define IO_2_INPUT (PIND)
+#define IO_2_PIN (PD2)
+
 #define IO_3_PORT (PORTD)
 #define IO_3_DIRECTION (DDRD)
 #define IO_3_INPUT (PIND)
 #define IO_3_PIN (PD3)
+
+#define IO_4_PORT (PORTD)
+#define IO_4_DIRECTION (DDRD)
+#define IO_4_INPUT (PIND)
+#define IO_4_PIN (PD4)
 
 #define IO_5_PORT (PORTD)
 #define IO_5_DIRECTION (DDRD)
