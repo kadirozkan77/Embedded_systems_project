@@ -19,12 +19,49 @@
 #define FAULT_BLINK_PERIOD_MS (200)
 #define FAULT_BLINK_DURATION_MS (3000)
 
+
+
+// Buzzer definition (Pin 9 at B port) for obstacle detection
+#define BUZZER_PIN PB1
+#define BUZZER_DDR DDRB
+#define BUZZER_PORT PORTB
+
+
+
+// Buzzer definition for continous jingle (Pin 10 at port B)
+#define BUZZER_PIN_JINGLE PB2
+#define BUZZER_DDR_JINGLE DDRB
+#define BUZZER_PORT_JINGLE PORTB
+
+
+
+// Button definitions
+#define BUTTON_PIN PD6
+#define BUTTON_DDR DDRD
+#define BUTTON_PORT PORTD
+
+
+// Defining notes
+ #define NOTE_1 250 // Hz
+ #define NOTE_1 50
+ #define NOTE_1 348
+ #define NOTE_1 124
+ #define NOTE_1 459
+
+ 
+
+
+
+
+
 // Floor numbers
 #define MIN_FLOOR 0
 #define MAX_FLOOR 99
 
 // Global variable (initial)
 int16_t CURRENT_FLOOR = 0; // data type is int 16 bit and t is for type
+
+
 
 
 // state 
@@ -40,22 +77,68 @@ typedef enum { // typedef is for defining state_t (to make the code readable)
 
 // LED configurations 
 avr_gpio_t movement_led = { // avr_gpio_t stores all register adresses to control GPIO pin
-	.port = &IO_10_PORT, // decides output value if it is 1 LED is on if it is 0 LED is off 
-	.direction = &IO_10_DIRECTION, // decides is pin input or output (LED is always output)
-	.pin_offset = IO_10_PIN, // The correspondence pin of bit in port register (position)
-	.input = &IO_10_INPUT // read
+	.port = &IO_2_PORT, // decides output value if it is 1 LED is on if it is 0 LED is off 
+	.direction = &IO_2_DIRECTION, // decides is pin input or output (LED is always output)
+	.pin_offset = IO_2_PIN, // The correspondence pin of bit in port register (position)
+	.input = &IO_2_INPUT // read
 };
 
-avr_gpio_t door_led = { // yes it is good but in circuit diagram we used two LEDs for door opening and closing so you need to define one more LED.
-	.port = &IO_11_PORT,
-	.direction = &IO_11_DIRECTION,
-	.pin_offset = IO_11_PIN,
-	.input = &IO_11_INPUT
+// Door opening
+avr_gpio_t door_led = { 
+	.port = &IO_3_PORT,
+	.direction = &IO_3_DIRECTION,
+	.pin_offset = IO_3_PIN,
+	.input = &IO_3_INPUT
+};
+
+avr_gpio_t obstacle_led = { // obstacle detection LED
+	.port = &IO_4_PORT,
+	.direction = &IO_4_DIRECTION,
+	.pin_offset = IO_4_PIN,
+	.input = &IO_4_INPUT
+};
+
+// Door closing
+avr_gpio_t door_close_led = { 
+	.port = &IO_5_PORT,
+	.direction = &IO_5_DIRECTION,
+	.pin_offset = IO_5_PIN,
+	.input = &IO_5_INPUT
 };
 
 
 
 
+
+
+
+
+void music_playing(uint16_t frequency, uint16_t total_time){
+	uint32_t period=1000000/frequency // in microsecond
+	uint32_t half_period=period/2;
+	uint32_t cycle = ((uint32_t)total_time*1000)/period
+
+	for (uint32_t i=0;i<cycle;i++){
+		BUZZER_PORT |= (1<<BUZZER_PIN)
+		delay(half_period)
+		BUZZER_PORT &= ~(1<<BUZZER_PIN)
+		delay(half_period)
+	}
+}
+
+
+void music_playing_jingle(uint16_t frequency, uint16_t total_time){
+	uint32_t period=1000000/frequency // in microsecond
+	uint32_t half_period=period/2;
+	uint32_t cycle = ((uint32_t)total_time*1000)/period
+
+	for (uint32_t i=0;i<cycle;i++){
+		BUZZER_PORT_JINGLE |= (1<<BUZZER_PIN_JINGLE)
+		delay(half_period)
+		BUZZER_PORT_JINGLE &= ~(1<<BUZZER_PIN_JINGLE)
+		delay(half_period)
+	}
+}
 
 
 // Takes input as destination floor
@@ -234,14 +317,28 @@ static state_t door_opening(void)
 
 static state_t door_closing(void) // please add LED here as well as instructions says that: "Door closing LED is on for 2 seconds"
 {
+
+	// LED on
+	set_as_output(&door_close_led); // makes pin output
+	set_gpio(&door_close_led); // LED ON
+
+
     // definition of the LED will be insterted here (delete here afterwards)
 	lcd_clrscr(); // clear the screen
 	lcd_puts("Door closing"); // print
 
 	DELAY_ms(DOOR_CLOSE_DURATION_MS); // time to close the door
 
+	clear_gpio(&door_close_led); // LED OFF
+	
+
 	return IDLE; // waits for the next order (next floor)
 }
+
+
+
+
+
 
 
 
@@ -250,6 +347,40 @@ static state_t door_closing(void) // please add LED here as well as instructions
 
 int main(void)
 {
+	// Button definitions
+
+	BUTTON_DDR &= ~(1 << BUTTON_PIN) // makes the 6th pin input which is connected to button
+	BUTTON_PORT |= (1<< BUTTON_PIN) // Pull-up is active: If button is not pressed HIGH(1) but if it is pressed it is LOW (0)
+
+
+
+
+
+
+
+
+
+
+	// jingle runs continuosly
+	BUZZER_DDR_JINGLE |= (1<<BUZZER_PIN_JINGLE) // Buzzer is output
+	while(1){
+		music_playing_jingle(NOTE_1,500)
+		delay(100)
+		music_playing_jingle(NOTE_2,500)
+		delay(100)
+		music_playing_jingle(NOTE_3,500)
+		delay(100)
+		music_playing_jingle(NOTE_4,500)
+		delay(100)
+		music_playing_jingle(NOTE_5,500)
+		delay(100)
+	}
+
+
+
+
+
+
 	lcd_init(LCD_DISP_ON); // initialization of the LCD
 
 	state_t state = IDLE; // initial state
@@ -262,18 +393,176 @@ int main(void)
 			case IDLE:
 			destination = floor_choice(); // takes input as destination floor
 			state = choose_direction(destination); // decides the direction of movement
+			// obstacle detection
+			if (!(PIND & (1<<BUTTON_PIN))){ // PIND checks the current bit situation and if button is pressed it is 0 but second part is 1 so to make the condition true we should get the negative of it
+	set_as_output(&obstacle_led); // makes pin output
+	
+	uint8_t count=0; // counts the blinking amount
+	while (count<3){
+		set_gpio(&obstacle_led); // LED ON
+		delay(FAULT_BLINK_PERIOD_MS) // blinking time
+		clear_gpio(&obstacle_led) // LED OFF
+		count++ // increment to count the blinking
+		// lcd printing
+		lcd_clrscr(); // clear
+		lcd_gotoxy(0, 0); // top left corner
+		lcd_puts("Obstacle detected"); // print
+	}
+	BUZZER_DDR |= (1<<BUZZER_PIN) // Buzzer is output
+	while(1){
+		music_playing(NOTE_1,500)
+		delay(100)
+		music_playing(NOTE_2,500)
+		delay(100)
+		music_playing(NOTE_3,500)
+		delay(100)
+		music_playing(NOTE_4,500)
+		delay(100)
+		music_playing(NOTE_5,500)
+		delay(100)
+
+		key = KEYPAD_GetKey();
+
+		if(key >= "1" || key<="9" || key == "*" || key=="#" || key=="A" || key=="B" || key=="C" || key=="D"){
+			break
+		}
+
+		
+	}
+	state = DOOR_CLOSING
+	
+}
+
 			break;
 
 			case GOINGUP:
 			state = going_up(destination);
+			// obstacle detection
+			if (!(PIND & (1<<BUTTON_PIN))){ // PIND checks the current bit situation and if button is pressed it is 0 but second part is 1 so to make the condition true we should get the negative of it
+	set_as_output(&obstacle_led); // makes pin output
+	
+	uint8_t count=0; // counts the blinking amount
+	while (count<3){
+		set_gpio(&obstacle_led); // LED ON
+		delay(FAULT_BLINK_PERIOD_MS) // blinking time
+		clear_gpio(&obstacle_led) // LED OFF
+		count++ // increment to count the blinking
+		// lcd printing
+		lcd_clrscr(); // clear
+		lcd_gotoxy(0, 0); // top left corner
+		lcd_puts("Obstacle detected"); // print
+	}
+	BUZZER_DDR |= (1<<BUZZER_PIN) // Buzzer is output
+	while(1){
+		music_playing(NOTE_1,500)
+		delay(100)
+		music_playing(NOTE_2,500)
+		delay(100)
+		music_playing(NOTE_3,500)
+		delay(100)
+		music_playing(NOTE_4,500)
+		delay(100)
+		music_playing(NOTE_5,500)
+		delay(100)
+
+		key = KEYPAD_GetKey();
+
+		if(key >= "1" || key<="9" || key == "*" || key=="#" || key=="A" || key=="B" || key=="C" || key=="D"){
+			break
+		}
+
+		
+	}
+	state = DOOR_CLOSING
+	
+}
+
 			break;
 
 			case GOINGDOWN:
 			state = going_down(destination);
+			// obstacle detection
+			if (!(PIND & (1<<BUTTON_PIN))){ // PIND checks the current bit situation and if button is pressed it is 0 but second part is 1 so to make the condition true we should get the negative of it
+	set_as_output(&obstacle_led); // makes pin output
+	
+	uint8_t count=0; // counts the blinking amount
+	while (count<3){
+		set_gpio(&obstacle_led); // LED ON
+		delay(FAULT_BLINK_PERIOD_MS) // blinking time
+		clear_gpio(&obstacle_led) // LED OFF
+		count++ // increment to count the blinking
+		// lcd printing
+		lcd_clrscr(); // clear
+		lcd_gotoxy(0, 0); // top left corner
+		lcd_puts("Obstacle detected"); // print
+	}
+	BUZZER_DDR |= (1<<BUZZER_PIN) // Buzzer is output
+	while(1){
+		music_playing(NOTE_1,500)
+		delay(100)
+		music_playing(NOTE_2,500)
+		delay(100)
+		music_playing(NOTE_3,500)
+		delay(100)
+		music_playing(NOTE_4,500)
+		delay(100)
+		music_playing(NOTE_5,500)
+		delay(100)
+
+		key = KEYPAD_GetKey();
+
+		if(key >= "1" || key<="9" || key == "*" || key=="#" || key=="A" || key=="B" || key=="C" || key=="D"){
+			break
+		}
+
+		
+	}
+	state = DOOR_CLOSING
+	
+}
 			break;
 
 			case DOOR_OPENING:
 			state = door_opening();
+			// obstacle detection
+			if (!(PIND & (1<<BUTTON_PIN))){ // PIND checks the current bit situation and if button is pressed it is 0 but second part is 1 so to make the condition true we should get the negative of it
+	set_as_output(&obstacle_led); // makes pin output
+	
+	uint8_t count=0; // counts the blinking amount
+	while (count<3){
+		set_gpio(&obstacle_led); // LED ON
+		delay(FAULT_BLINK_PERIOD_MS) // blinking time
+		clear_gpio(&obstacle_led) // LED OFF
+		count++ // increment to count the blinking
+		// lcd printing
+		lcd_clrscr(); // clear
+		lcd_gotoxy(0, 0); // top left corner
+		lcd_puts("Obstacle detected"); // print
+	}
+	BUZZER_DDR |= (1<<BUZZER_PIN) // Buzzer is output
+	while(1){
+		music_playing(NOTE_1,500)
+		delay(100)
+		music_playing(NOTE_2,500)
+		delay(100)
+		music_playing(NOTE_3,500)
+		delay(100)
+		music_playing(NOTE_4,500)
+		delay(100)
+		music_playing(NOTE_5,500)
+		delay(100)
+
+		key = KEYPAD_GetKey();
+
+		if(key >= "1" || key<="9" || key == "*" || key=="#" || key=="A" || key=="B" || key=="C" || key=="D"){
+			break
+		}
+
+		
+	}
+	state = DOOR_CLOSING
+	
+}
 			break;
 
 			case DOOR_CLOSING:
@@ -290,3 +579,5 @@ int main(void)
 		}
 	}
 }
+
+
