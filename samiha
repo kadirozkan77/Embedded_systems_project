@@ -21,17 +21,14 @@
 
 
 
-// Buzzer definition (Pin 9 at B port) for obstacle detection
+// Buzzer definition (Pin 9 at B port) for obstacle detection (it operates the continuous jingle as well)
 #define BUZZER_PIN PB1
 #define BUZZER_DDR DDRB
 #define BUZZER_PORT PORTB
 
 
 
-// Buzzer definition for continous jingle (Pin 10 at port B)
-#define BUZZER_PIN_JINGLE PB2
-#define BUZZER_DDR_JINGLE DDRB
-#define BUZZER_PORT_JINGLE PORTB
+
 
 
 
