@@ -129,7 +129,7 @@ static int16_t floor_choice(void)
                 }
                 else if (key == '*') {
                     destination_floor = 0;
-                    char buffer[40];
+                    char buffer[3];
                     snprintf(buffer, sizeof(buffer), "%d", destination_floor);
                     printf("%s", buffer);
                     
@@ -217,10 +217,13 @@ int main(void)
         
         char idle = "Idle";
        
-        char bufup[30];
-        char bufdown[30];
         
-        uint8_t recieved_data[20];
+        char sent_data = '5';
+        char going_up_command[] = "U";
+        char going_down_command[] = "D";
+        
+        
+        uint8_t recieved_data[15];
         
 
         switch (state)
@@ -229,14 +232,12 @@ int main(void)
             break;
 
             case GOINGUP:
-            sprintf(bufup, "GOINGUP-%d", destination);
-            spi_master_send(bufup, strlen((char*)bufup));
+            spi_master_send((uint8_t*)going_up_command, strlen(going_up_command));
             state = going_up(destination);
             break;
             
             case GOINGDOWN:
-            sprintf(bufdown, "GOINGDOWN-%d", destination);
-            spi_master_send(bufdown, strlen((char*)bufdown));
+            spi_master_send((uint8_t*)going_down_command, strlen(going_down_command));
             state = going_down(destination);
             break;
             
