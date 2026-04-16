@@ -1,36 +1,74 @@
 #include "floor_queue.h"
 
-#define MAX_QUEUE 10
+static int16_t queue_data[FLOOR_QUEUE_SIZE];
+static uint8_t queue_front = 0;
+static uint8_t queue_rear = 0;
+static uint8_t queue_count = 0;
 
-static int queue[MAX_QUEUE];
-static int front = 0;
-static int rear = -1;
-static int count = 0;
-
-void queue_init(void) {
-    front = 0;
-    rear = -1;
-    count = 0;
+void floor_queue_init(void)
+{
+    queue_front = 0;
+    queue_rear = 0;
+    queue_count = 0;
 }
 
-void enqueue_floor(int floor) {
-    if (count < MAX_QUEUE) {
-        rear = (rear + 1) % MAX_QUEUE;
-        queue[rear] = floor;
-        count++;
+uint8_t floor_queue_is_empty(void)
+{
+    return (queue_count == 0);
+}
+
+uint8_t floor_queue_is_full(void)
+{
+    return (queue_count >= FLOOR_QUEUE_SIZE);
+}
+
+uint8_t floor_queue_contains(int16_t floor)
+{
+    uint8_t i;
+    uint8_t index;
+
+    for (i = 0; i < queue_count; i++)
+    {
+        index = (queue_front + i) % FLOOR_QUEUE_SIZE;
+        if (queue_data[index] == floor)
+        {
+            return 1;
+        }
     }
+    return 0;
 }
 
-int dequeue_floor(void) {
-    if (count == 0) return -1;
+uint8_t floor_queue_enqueue(int16_t floor)
+{
+    if (floor_queue_is_full())
+    {
+        return 0;
+    }
 
-    int floor = queue[front];
-    front = (front + 1) % MAX_QUEUE;
-    count--;
+    queue_data[queue_rear] = floor;
+    queue_rear = (queue_rear + 1) % FLOOR_QUEUE_SIZE;
+    queue_count++;
 
-    return floor;
+    return 1;
 }
 
-int is_queue_empty(void) {
-    return (count == 0);
+uint8_t floor_queue_dequeue(int16_t *floor)
+{
+    if (floor_queue_is_empty())
+    {
+        return 0;
+    }
+
+    *floor = queue_data[queue_front];
+    queue_front = (queue_front + 1) % FLOOR_QUEUE_SIZE;
+    queue_count--;
+
+    return 1;
+}
+
+void floor_queue_clear(void)
+{
+    queue_front = 0;
+    queue_rear = 0;
+    queue_count = 0;
 }
