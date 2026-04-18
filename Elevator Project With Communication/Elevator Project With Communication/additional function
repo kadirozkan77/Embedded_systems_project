@@ -1,3 +1,9 @@
+// D7 (PH4) as input
+DDRH &= ~(1 << PH4);
+
+// Enable pull-up
+PORTH |= (1 << PH4);
+
 static void emergency_function(void)
 {
     // Check button on D7 (PH4) → active LOW
