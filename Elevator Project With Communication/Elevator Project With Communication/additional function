@@ -1,0 +1,21 @@
+static void emergency_function(void)
+{
+    // Check button on D7 (PH4) → active LOW
+    if (!(PINH & (1<<PH4)))
+    {
+        // LED is still on D12 (PB6)
+        DDRB |= (1 << PB6);   // set as output
+
+        // Turn LED ON
+        PORTB |= (1 << PB6);
+
+        // Keep LED ON while button is pressed
+        while (!(PINH & (1<<PH4)))
+        {
+            ; // wait
+        }
+
+        // Turn LED OFF after release
+        PORTB &= ~(1 << PB6);
+    }
+}
