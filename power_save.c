@@ -5,9 +5,9 @@
 
 // Using INT0 (PD2 on UNO)
 // This pin is connected to the button
-#define WAKEUP_DDR   DDRD
-#define WAKEUP_PORT  PORTD
-#define WAKEUP_PIN   PD2
+#define WAKEUP_DDR   DDRH
+#define WAKEUP_PORT  PORTH
+#define WAKEUP_PIN   PDH4
 
 
 
@@ -23,12 +23,12 @@ void power_save_init(void)
 
     // Enable external interrupt INT0
     // MCU will "watch" this pin
-    EIMSK |= (1 << INT0);
+    EIMSK |= (1 << INT4);
 
     // Set interrupt to trigger on FALLING EDGE
     // HIGH, LOW (button press)
-    EICRA |= (1 << ISC01);
-    EICRA &= ~(1 << ISC00);
+    EICRA |= (1 << ISC41);
+    EICRA &= ~(1 << ISC40);
 
     // Enable global interrupts (must have!)
     sei();
