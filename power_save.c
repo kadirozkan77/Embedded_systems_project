@@ -66,7 +66,7 @@ void enter_light_sleep(void)
 
     sei();            // ensure interrupts are enabled
 
-    sleep_cpu();      // MCU sleeps here 😴
+    sleep_cpu();      // MCU sleeps here 
 
     // Code continues after wake-up
     sleep_disable();
